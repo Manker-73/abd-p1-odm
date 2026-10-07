@@ -28,3 +28,46 @@ Recinto:
   regular_indexes:
     - aforo
   location_index: direccion
+
+Artista:
+  required_vars:
+    - nombre
+  admissible_vars:
+    - generos
+    - pais
+    - anio_inicio
+  unique_indexes:
+    - nombre
+  regular_indexes:
+    - pais
+  location_index: 
+
+Evento:
+  required_vars:
+    - titulo
+    - recinto
+    - fecha
+  admissible_vars:
+    - artistas
+    - precio_zona
+    - entradas_vendidas
+  unique_indexes: []
+  regular_indexes:
+    - recinto
+    - fecha
+  location_index: 
+
+Asistente:
+  required_vars:
+    - nombre
+    - correo
+  admissible_vars:
+    - fecha_alta
+    - direccion
+    - direccion_loc
+    - preferencias
+  unique_indexes:
+    - correo
+  regular_indexes:
+    - nombre
+  location_index: direccion
