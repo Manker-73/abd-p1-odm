@@ -18,37 +18,29 @@ def getLocationPoint(address: str) -> Point:
     Obtiene las coordenadas de una dirección en formato geojson.Point
     Utilizar la API de geopy para obtener las coordenadas de la direccion
     Cuidado, la API es publica tiene limite de peticiones, utilizar sleeps.
-
-    Parameters
-    ----------
-        address : str
-            direccion completa de la que obtener las coordenadas
-    Returns
-    -------
-        geojson.Point
-            coordenadas del punto de la direccion
     """
     location = None
     intentos = 0
     maxIntentos = 5
+    
     while location is None and intentos < maxIntentos:
         intentos += 1
         try:
             time.sleep(1)
-            #TODO
             # Es necesario proporcionar un user_agent para utilizar la API
-            # Utilizar un nombre aleatorio para el user_agent
-            location = Nominatim(user_agent="Mi-Nombre-Aleatorio").geocode(address)
+            location = Nominatim(user_agent="EnVivo_App_DataTeam_Fase1").geocode(address)
         except GeocoderTimedOut:
             # Puede lanzar una excepcion si se supera el tiempo de espera
             # Volver a intentarlo
             continue
-    #TODO
-    # Devolver un GeoJSON de tipo punto con la latitud y longitud almacenadas.
-    # Si no se consiguieron coordenadas, lanzar ValueError: la funcion no puede
-    # devolver un punto inventado ni None silenciosamente. Es lo que espera la
-    # prueba test_get_location_point_timeout_failure.
-
+            
+    # Si tras todos los reintentos no conseguimos coordenadas, lanzamos la excepción
+    if location is None:
+        raise ValueError(f"No se pudieron obtener coordenadas para la dirección: {address}")
+        
+    # Devolvemos un GeoJSON de tipo punto con la longitud y latitud almacenadas.
+    # Nota: GeoJSON requiere el orden (longitud, latitud)
+    return Point((location.longitude, location.latitude))
 class Model:
     """ 
     Clase de modelo abstracta
@@ -99,24 +91,43 @@ class Model:
         Inicializa el modelo con los valores proporcionados en kwargs
         Comprueba que los valores proporcionados en kwargs son admitidos
         por el modelo y que las atributos requeridos son proporcionadas.
-
-        Parameters
-        ----------
-            kwargs : dict[str, str | dict]
-                diccionario con los valores de las atributos del modelo
         """
         self._data: dict[str, str | dict | list] = {}
-        #TODO
-        # Realizar las comprabociones y gestiones necesarias
-        # antes de la asignacion.
+        # Inicializamos el set para llevar el control de atributos modificados
+        self._modified_vars = set()
+        
+        # 1. Comprobar que no falta ningún atributo requerido
+        atributos_faltantes = self._required_vars - kwargs.keys()
+        if atributos_faltantes:
+            raise ValueError(f"Faltan atributos requeridos para el modelo: {atributos_faltantes}")
+            
+        # 2. Comprobar que no hay atributos no admitidos (ignoramos '_id' de Mongo)
+        atributos_invalidos = kwargs.keys() - self._required_vars - self._admissible_vars - {'_id'}
+        if atributos_invalidos:
+            raise ValueError(f"Se han proporcionado atributos no admitidos: {atributos_invalidos}")
 
         # Asigna todos los valores en kwargs a las atributos con 
         # nombre las claves en kwargs
-        # Utilizamos el atributo data para guardar los variables 
-        # almacenadas en la base de datos en una solo atributo
-        # Encapsular los datos en una sola variable facilita la 
-        # gestion en metodos como save.
         self._data.update(kwargs)
+
+    def __setattr__(self, name: str, value: str | dict) -> None:
+        """ Sobreescribe el metodo de asignacion de valores a los 
+        atributos del objeto con el fin de controlar que atributos 
+        son modificados y cuando son modificados.
+        """
+        if name in self._internal_vars:
+            super().__setattr__(name, value)
+            return
+            
+        # 1. Comprobar que el atributo a modificar es válido
+        if name not in self._required_vars and name not in self._admissible_vars and name != '_id':
+            raise ValueError(f"No se puede asignar el atributo '{name}' porque no es admitido por el modelo.")
+
+        # 2. Registrar el atributo como modificado
+        self._modified_vars.add(name)
+
+        # Asigna el valor value a la variable name
+        self._data[name] = value
 
     def __setattr__(self, name: str, value: str | dict) -> None:
         """ Sobreescribe el metodo de asignacion de valores a los 
@@ -156,32 +167,67 @@ class Model:
         #TODO
         pass #No olvidar eliminar esta linea una vez implementado
 
+    def save(self) -> None:
+        """
+        Guarda el modelo en la base de datos
+        Si el modelo no existe en la base de datos, se crea un nuevo
+        documento con los valores del modelo. En caso contrario, se
+        actualiza el documento existente con los nuevos valores del
+        modelo.
+        """
+        es_nuevo = '_id' not in self._data
+        
+        # 1. Gestionar la geolocalización antes de guardar
+        if self._location_var and self._location_var in self._data:
+            # Geolocalizamos si el documento es nuevo o si se ha modificado la dirección
+            if es_nuevo or self._location_var in self._modified_vars:
+                direccion = self._data[self._location_var]
+                punto_geojson = getLocationPoint(direccion)
+                campo_loc = f"{self._location_var}_loc"
+                
+                self._data[campo_loc] = punto_geojson
+                
+                # Si estamos actualizando, registramos también la localización modificada
+                if not es_nuevo:
+                    self._modified_vars.add(campo_loc)
+
+        # 2. Persistir los datos en MongoDB
+        if es_nuevo:
+            # Documento nuevo: insertamos todo el diccionario _data
+            resultado = self._db.insert_one(self._data)
+            self._data['_id'] = resultado.inserted_id
+        else:
+            # Documento existente: actualizamos solo lo estrictamente modificado
+            if self._modified_vars:
+                datos_a_actualizar = {campo: self._data[campo] for campo in self._modified_vars}
+                self._db.update_one({'_id': self._data['_id']}, {'$set': datos_a_actualizar})
+                
+        # 3. Limpiamos el registro de variables modificadas tras el éxito
+        self._modified_vars.clear()
+
     def delete(self) -> None:
         """
         Elimina el modelo de la base de datos
         """
-        #TODO
-        pass
-    
+        # Solo podemos borrar si existe un _id
+        if '_id' in self._data:
+            self._db.delete_one({'_id': self._data['_id']})
+            # Opcional: quitamos el _id de memoria para reflejar que ya no está en la base
+            del self._data['_id']
+
     @classmethod
     def find(cls, filter: dict[str, str | dict]) -> Any:
         """ 
         Utiliza el metodo find de pymongo para realizar una consulta
         de lectura en la BBDD.
         find debe devolver un cursor de modelos ModelCursor
-
-        Parameters
-        ----------
-            filter : dict[str, str | dict]
-                diccionario con el criterio de busqueda de la consulta
-        Returns
-        -------
-            ModelCursor
-                cursor de modelos
         """ 
-        #TODO
-        # cls es el puntero a la clase
-        pass #No olvidar eliminar esta linea una vez implementado
+        # cls es el puntero a la clase actual
+        # Realizamos la consulta cruda a pymongo
+        cursor_pymongo = cls._db.find(filter)
+        
+        # Devolvemos el cursor envuelto en nuestro iterador personalizado
+        return ModelCursor(cls, cursor_pymongo)
 
     @classmethod
     def aggregate(cls, pipeline: list[dict]) -> pymongo.command_cursor.CommandCursor:
@@ -243,13 +289,19 @@ class Model:
         cls._db = db_collection
         cls._required_vars = required_vars
         cls._admissible_vars = admissible_vars
-        # TODO
-        # Recorrer indexes y crear cada índice segun su tipo: 'unique', 'asc'
-        # y 'geosphere'. Comparar el tipo por igualdad, no con el operador 'in'.
-        # Ojo con el índice geoespacial: save() guarda el GeoJSON Point en
-        # <campo>_loc, luego el índice 2dsphere va sobre <campo>_loc, mientras
-        # que _location_var debe guardar el nombre del campo base.
-
+        
+        # Recorrer indexes y crear cada índice segun su tipo
+        if indexes:
+            for campo, tipo in indexes.items():
+                if tipo == "unique":
+                    # Índice único ascendente
+                    cls._db.create_index([(campo, pymongo.ASCENDING)], unique=True)
+                elif tipo == "asc":
+                    # Índice ascendente normal
+                    cls._db.create_index([(campo, pymongo.ASCENDING)])
+                elif tipo == "geosphere":
+                    # Índice geoespacial 2dsphere
+                    cls._db.create_index([(campo, pymongo.GEOSPHERE)])
 
 class ModelCursor:
     """ 
@@ -289,13 +341,20 @@ class ModelCursor:
         """
         Devuelve un iterador que recorre los elementos del cursor
         y devuelve los documentos en forma de objetos modelo.
-        Utilizar yield para generar el iterador
-        Utilizar la funcion next para obtener el siguiente documento del cursor
-        Utilizar alive para comprobar si existen mas documentos.
         """
-        #TODO
-        pass #No olvidar eliminar esta linea una vez implementado
-
+        # alive nos indica si quedan elementos en el cursor de MongoDB
+        while self.cursor.alive:
+            try:
+                # Extraemos el siguiente diccionario usando next()
+                documento = self.cursor.next()
+                
+                # Desempaquetamos el diccionario (**documento) para instanciar 
+                # un nuevo objeto del modelo correspondiente y lo devolvemos con yield
+                yield self.model(**documento)
+                
+            except StopIteration:
+                # Cuando next() agota los elementos, lanza StopIteration
+                break
 
 def initApp(definitions_path: str = "./models.yml", mongodb_uri="mongodb://localhost:27017/", db_name="abd", scope=globals()) -> None:
     """ 
@@ -304,31 +363,51 @@ def initApp(definitions_path: str = "./models.yml", mongodb_uri="mongodb://local
     Inicializa las clases de los modelos proporcionando los indices y 
     atributos admitidos y requeridos para cada una de ellas y la conexión a la
     collecion de la base de datos.
-    
-    Parameters
-    ----------
-        definitions_path : str
-            ruta al fichero de definiciones de modelos
-        mongodb_uri : str
-            uri de conexion a la base de datos
-        db_name : str
-            nombre de la base de datos
     """
-    #TODO
-    # Inicializar base de datos
+    # Inicializar cliente de base de datos
+    client = MongoClient(mongodb_uri)
+    db = client[db_name]
 
-    #TODO
+    # Leer el fichero de definiciones de modelos YAML
+    with open(definitions_path, 'r', encoding='utf-8') as f:
+        definitions = yaml.safe_load(f)
+
     # Declarar tantas clases modelo colecciones existan en la base de datos
-    # Leer el fichero de definiciones de modelos para obtener las colecciones,
-    # indices y los atributos admitidos y requeridos para cada una de ellas.
-    # Ejemplo de declaracion de modelo para colecion llamada MiModelo
-    scope["MiModelo"] = type("MiModelo", (Model,),{})
-    # La clase se declara en tiempo de ejecucion y queda en scope, que no tiene
-    # por que ser el espacio de nombres global: las pruebas le pasan su propio
-    # diccionario. Por eso se inicializa a traves de scope y no por su nombre,
-    # que ahi todavia no existe.
-    scope["MiModelo"].init_class(db_collection=None, indexes=None, required_vars=None, admissible_vars=None)
+    if definitions:
+        for collection_name, config in definitions.items():
+            # Crear la clase dinámicamente en tiempo de ejecución
+            scope[collection_name] = type(collection_name, (Model,), {})
+            
+            # Obtener los atributos como conjuntos (sets)
+            required_vars = set(config.get("required_vars") or [])
+            admissible_vars = set(config.get("admissible_vars") or [])
+            
+            # Preparar el diccionario de índices
+            indexes = {}
+            if config.get("unique_indexes"):
+                for idx in config["unique_indexes"]:
+                    indexes[idx] = "unique"
+                    
+            if config.get("regular_indexes"):
+                for idx in config["regular_indexes"]:
+                    indexes[idx] = "asc"
+                    
+            # Gestionar la variable de localización
+            location_var = config.get("location_index")
+            if location_var:
+                # Asignar a la variable interna el nombre base del campo
+                scope[collection_name]._location_var = location_var
+                # Añadir el índice geoespacial sobre el sufijo _loc
+                indexes[f"{location_var}_loc"] = "geosphere"
 
+            # Inicializar la clase con la configuración recopilada
+            db_collection = db[collection_name]
+            scope[collection_name].init_class(
+                db_collection=db_collection, 
+                indexes=indexes, 
+                required_vars=required_vars, 
+                admissible_vars=admissible_vars
+            )
 if __name__ == '__main__':
     
     # Inicializar base de datos y modelos con initApp
