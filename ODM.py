@@ -1,5 +1,5 @@
 __author__ = 'Pablo Ramos Criado'
-__students__ = 'Nombres_y_Apellidos'
+__students__ = 'Oscar_Ortega_Rosa_Garrido'
 
 
 from geopy.geocoders import Nominatim
@@ -41,44 +41,13 @@ def getLocationPoint(address: str) -> Point:
     # Devolvemos un GeoJSON de tipo punto con la longitud y latitud almacenadas.
     # Nota: GeoJSON requiere el orden (longitud, latitud)
     return Point((location.longitude, location.latitude))
+
+
 class Model:
     """ 
     Clase de modelo abstracta
     Crear tantas clases que hereden de esta clase como  
     colecciones/modelos se deseen tener en la base de datos.
-
-    Attributes
-    ----------
-        required_vars : set[str]
-            conjunto de atributos requeridos por el modelo
-        admissible_vars : set[str]
-            conjunto de atributos admitidos por el modelo
-        db : pymongo.collection.Collection
-            conexion a la coleccion de la base de datos
-    
-    Methods
-    -------
-        __setattr__(name: str, value: str | dict) -> None
-            Sobreescribe el metodo de asignacion de valores a los 
-            atributos del objeto con el fin de controlar qué atributos 
-            son modificados y cuando son modificados.
-        __getattr__(name: str) -> Any
-            Sobreescribe el metodo de acceso a atributos del objeto 
-        save()  -> None
-            Guarda el modelo en la base de datos
-        delete() -> None
-            Elimina el modelo de la base de datos
-        find(filter: dict[str, str | dict]) -> ModelCursor
-            Realiza una consulta de lectura en la BBDD.
-            Devuelve un cursor de modelos ModelCursor
-        aggregate(pipeline: list[dict]) -> pymongo.command_cursor.CommandCursor
-            Devuelve el resultado de una consulta aggregate.
-        find_by_id(id: str) -> dict | None
-            Busca un documento por su id utilizando la cache y lo devuelve.
-            Si no se encuentra el documento, devuelve None.
-        init_class(db_collection: pymongo.collection.Collection, required_vars: set[str], admissible_vars: set[str]) -> None
-            Inicializa las variables de clase en la inicializacion del sistema.
-
     """
     _required_vars: set[str]
     _admissible_vars: set[str]
@@ -89,8 +58,6 @@ class Model:
     def __init__(self, **kwargs: dict[str, str | dict | list]) -> None:
         """
         Inicializa el modelo con los valores proporcionados en kwargs
-        Comprueba que los valores proporcionados en kwargs son admitidos
-        por el modelo y que las atributos requeridos son proporcionadas.
         """
         self._data: dict[str, str | dict | list] = {}
         # Inicializamos el set para llevar el control de atributos modificados
@@ -106,8 +73,7 @@ class Model:
         if atributos_invalidos:
             raise ValueError(f"Se han proporcionado atributos no admitidos: {atributos_invalidos}")
 
-        # Asigna todos los valores en kwargs a las atributos con 
-        # nombre las claves en kwargs
+        # Asigna todos los valores en kwargs a las atributos con nombre las claves en kwargs
         self._data.update(kwargs)
 
     def __setattr__(self, name: str, value: str | dict) -> None:
@@ -129,21 +95,6 @@ class Model:
         # Asigna el valor value a la variable name
         self._data[name] = value
 
-    def __setattr__(self, name: str, value: str | dict) -> None:
-        """ Sobreescribe el metodo de asignacion de valores a los 
-        atributos del objeto con el fin de controlar que atributos 
-        son modificados y cuando son modificados.
-        """
-        if name in self._internal_vars:
-            super().__setattr__(name, value)
-            return
-        #TODO
-        # Realizar las comprabociones y gestiones necesarias
-        # antes de la asignacion.
-
-        # Asigna el valor value a la variable name
-        self._data[name] = value
-
     def __getattr__(self, name: str) -> Any:
         """ Sobreescribe el metodo de acceso a atributos del objeto
         __getattr__ solo es llamado cuando no encuentra el atributo
@@ -156,17 +107,6 @@ class Model:
         except KeyError:
             raise AttributeError
         
-    def save(self) -> None:
-        """
-        Guarda el modelo en la base de datos
-        Si el modelo no existe en la base de datos, se crea un nuevo
-        documento con los valores del modelo. En caso contrario, se
-        actualiza el documento existente con los nuevos valores del
-        modelo.
-        """
-        #TODO
-        pass #No olvidar eliminar esta linea una vez implementado
-
     def save(self) -> None:
         """
         Guarda el modelo en la base de datos
@@ -233,18 +173,6 @@ class Model:
     def aggregate(cls, pipeline: list[dict]) -> pymongo.command_cursor.CommandCursor:
         """ 
         Devuelve el resultado de una consulta aggregate. 
-        No hay nada que hacer en esta funcion.
-        Se utilizara para las consultas solicitadas
-        en el segundo proyecto de la practica.
-
-        Parameters
-        ----------
-            pipeline : list[dict]
-                lista de etapas de la consulta aggregate 
-        Returns
-        -------
-            pymongo.command_cursor.CommandCursor
-                cursor de pymongo con el resultado de la consulta
         """ 
         return cls._db.aggregate(pipeline)
     
@@ -252,39 +180,14 @@ class Model:
     def find_by_id(cls, id: str) -> Self | None:
         """ 
         NO IMPLEMENTAR HASTA EL TERCER PROYECTO
-        Busca un documento por su id utilizando la cache y lo devuelve.
-        Si no se encuentra el documento, devuelve None.
-
-        Parameters
-        ----------
-            id : str
-                id del documento a buscar
-        Returns
-        -------
-            Self | None
-                Modelo del documento encontrado o None si no se encuentra
         """ 
-        #TODO
         pass
 
     @classmethod
     def init_class(cls, db_collection: pymongo.collection.Collection, indexes:dict[str,str], required_vars: set[str], admissible_vars: set[str]) -> None:
         """ 
         Inicializa los atributos de clase en la inicializacion del sistema.
-        Aqui se deben inicializar o asegurar los indices. Tambien se puede
-        alguna otra inicialización/comprobaciones o cambios adicionales
-        que estime el alumno.
-
-        Parameters
-        ----------
-            db_collection : pymongo.collection.Collection
-                Conexion a la collecion de la base de datos.
-            indexes: Dict[str,str]
-                Set de indices y tipo de indices para la coleccion
-            required_vars : set[str]
-                Set de atributos requeridos por el modelo
-            admissible_vars : set[str] 
-                Set de atributos admitidos por el modelo
+        Aqui se deben inicializar o asegurar los indices.
         """
         cls._db = db_collection
         cls._required_vars = required_vars
@@ -303,36 +206,17 @@ class Model:
                     # Índice geoespacial 2dsphere
                     cls._db.create_index([(campo, pymongo.GEOSPHERE)])
 
+
 class ModelCursor:
     """ 
     Cursor para iterar sobre los documentos del resultado de una
     consulta. Los documentos deben ser devueltos en forma de objetos
     modelo.
-
-    Attributes
-    ----------
-        model_class : Model
-            Clase para crear los modelos de los documentos que se iteran.
-        cursor : pymongo.cursor.Cursor
-            Cursor de pymongo a iterar
-
-    Methods
-    -------
-        __iter__() -> Generator
-            Devuelve un iterador que recorre los elementos del cursor
-            y devuelve los documentos en forma de objetos modelo.
     """
 
     def __init__(self, model_class: Model, cursor: pymongo.cursor.Cursor):
         """
         Inicializa el cursor con la clase de modelo y el cursor de pymongo
-
-        Parameters
-        ----------
-            model_class : Model
-                Clase para crear los modelos de los documentos que se iteran.
-            cursor: pymongo.cursor.Cursor
-                Cursor de pymongo a iterar
         """
         self.model = model_class
         self.cursor = cursor
@@ -355,6 +239,7 @@ class ModelCursor:
             except StopIteration:
                 # Cuando next() agota los elementos, lanza StopIteration
                 break
+
 
 def initApp(definitions_path: str = "./models.yml", mongodb_uri="mongodb://localhost:27017/", db_name="abd", scope=globals()) -> None:
     """ 
@@ -408,36 +293,44 @@ def initApp(definitions_path: str = "./models.yml", mongodb_uri="mongodb://local
                 required_vars=required_vars, 
                 admissible_vars=admissible_vars
             )
+
+
 if __name__ == '__main__':
     
-    # Inicializar base de datos y modelos con initApp
-    #TODO
+    # Inicializar base de datos y modelos con initApp
     initApp()
 
-    #Ejemplo
-    m = MiModelo(nombre="Pablo", apellido="Ramos", edad=18)
-    m.save()
-    m.nombre="Pedro"
-    print(m.nombre)
-
     # Hacer pruebas para comprobar que funciona correctamente el modelo
-    #TODO
     # Crear modelo
+    a = Asistente(nombre="Pepe", correo="pepe@u-tad.com")
 
     # Asignar nuevo valor a variable admitida del objeto 
+    a.fecha_alta = "2026-10-11"
 
     # Asignar nuevo valor a variable no admitida del objeto 
+    try:
+        a.edad = 25
+    except ValueError as e:
+        print(f"Error capturado correctamente: {e}")
 
     # Guardar
+    a.save()
 
-    # Asignar nuevo valor a variable admitida del objeto
+    # Asignar nuevo valor a variable admitida del objeto (ej: dirección para probar geopy)
+    a.direccion = "Plaza de Callao, Madrid"
 
     # Guardar
+    a.save()
 
     # Buscar nuevo documento con find
+    cursor = Asistente.find({"correo": "pepe@u-tad.com"})
 
     # Obtener primer documento
+    doc = next(cursor)
+    print(f"Recuperado: {doc.nombre}")
 
     # Modificar valor de variable admitida
+    doc.preferencias = ["Pop", "Rock"]
 
     # Guardar
+    doc.save()
