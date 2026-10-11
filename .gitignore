@@ -8,3 +8,4 @@ __pycache__/
 .env
 P1-ODM-enunciado.pdf
 *.json
+*.zip
