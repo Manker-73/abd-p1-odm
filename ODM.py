@@ -302,7 +302,7 @@ if __name__ == '__main__':
 
     # Hacer pruebas para comprobar que funciona correctamente el modelo
     # Crear modelo
-    a = Asistente(nombre="Pepe", correo="pepe@u-tad.com")
+    a = Asistente(nombre="Pepe", correo="pepe@correo.com")
 
     # Asignar nuevo valor a variable admitida del objeto 
     a.fecha_alta = "2026-10-11"
@@ -323,7 +323,7 @@ if __name__ == '__main__':
     a.save()
 
     # Buscar nuevo documento con find
-    cursor = Asistente.find({"correo": "pepe@u-tad.com"})
+    cursor = Asistente.find({"correo": "pepe@correo.com"})
 
     # Obtener primer documento
     doc = next(cursor)
