@@ -294,43 +294,82 @@ def initApp(definitions_path: str = "./models.yml", mongodb_uri="mongodb://local
                 admissible_vars=admissible_vars
             )
 
-
 if __name__ == '__main__':
+    import json
+    from bson import json_util
     
-    # Inicializar base de datos y modelos con initApp
+    # Inicializar base de datos y modelos
     initApp()
+    
+    # Recintos
+    wizink = Recinto(
+        nombre="WiZink Center", 
+        direccion="Av. de Felipe II, s/n, 28009 Madrid", 
+        aforo=15000
+    )
+    wizink.zonas = {"Pista": 5000, "Grada 1": 5000, "Grada 2": 5000}
+    wizink.servicios = ["Comida", "Bebida", "Merchandising", "Ropero"]
+    wizink.save()
 
-    # Hacer pruebas para comprobar que funciona correctamente el modelo
-    # Crear modelo
-    a = Asistente(nombre="Pepe", correo="pepe@correo.com")
+    # Artistas
+    walls = Artista(nombre="Walls")
+    walls.generos = ["Pop Rock", "Urbano", "Indie"]
+    walls.pais = "España"
+    walls.anio_inicio = 2017
+    walls.save()
 
-    # Asignar nuevo valor a variable admitida del objeto 
-    a.fecha_alta = "2026-10-11"
+    metrika = Artista(nombre="Metrika")
+    metrika.generos = ["Trap", "Urbano"]
+    metrika.pais = "España"
+    metrika.anio_inicio = 2020
+    metrika.save()
 
-    # Asignar nuevo valor a variable no admitida del objeto 
-    try:
-        a.edad = 25
-    except ValueError as e:
-        print(f"Error capturado correctamente: {e}")
+    # Eventos separados
+    evento_walls = Evento(
+        titulo="El dia que me olvides Tour",
+        recinto=wizink.nombre,
+        fecha="2026-11-20T21:00:00Z"
+    )
+    evento_walls.artistas = [walls.nombre]
+    evento_walls.precio_zona = {"Pista": 40, "Grada 1": 30, "Grada 2": 25}
+    evento_walls.entradas_vendidas = 9500
+    evento_walls.save()
 
-    # Guardar
-    a.save()
+    evento_metrika = Evento(
+        titulo="Jane Doe in the dream house tour",
+        recinto=wizink.nombre,
+        fecha="2026-12-15T20:30:00Z"
+    )
+    evento_metrika.artistas = [metrika.nombre]
+    evento_metrika.precio_zona = {"Pista": 30, "Grada 1": 25, "Grada 2": 20}
+    evento_metrika.entradas_vendidas = 8200
+    evento_metrika.save()
 
-    # Asignar nuevo valor a variable admitida del objeto (ej: dirección para probar geopy)
-    a.direccion = "Plaza de Callao, Madrid"
+    # Asistentes con correos y direcciones genéricas (pero reales para que Geopy las encuentre)
+    oscar = Asistente(nombre="Oscar Ortega", correo="oscar.ortega@correo.com")
+    oscar.direccion = "Gran Vía, Madrid"
+    oscar.preferencias = ["Urbano", "Pop Rock"]
+    oscar.fecha_alta = "2026-10-11"
+    oscar.save()
 
-    # Guardar
-    a.save()
+    rosa = Asistente(nombre="Rosa Garrido", correo="rosa.garrido@correo.com")
+    rosa.direccion = "Paseo de la Castellana, Madrid"
+    rosa.preferencias = ["Trap", "Urbano"]
+    rosa.fecha_alta = "2026-10-11"
+    rosa.save()
 
-    # Buscar nuevo documento con find
-    cursor = Asistente.find({"correo": "pepe@correo.com"})
+    # 3. EXPORTACIÓN A JSON
+    print("\nGenerando archivos JSON...")
+    colecciones = ["Recinto", "Artista", "Evento", "Asistente"]
+    client = MongoClient("mongodb://localhost:27017/")
+    db = client["abd"]
 
-    # Obtener primer documento
-    doc = next(cursor)
-    print(f"Recuperado: {doc.nombre}")
-
-    # Modificar valor de variable admitida
-    doc.preferencias = ["Pop", "Rock"]
-
-    # Guardar
-    doc.save()
+    for nombre_col in colecciones:
+        datos = list(db[nombre_col].find())
+        nombre_archivo = f"{nombre_col.lower()}.json"
+        
+        with open(nombre_archivo, "w", encoding="utf-8") as f:
+            json.dump(datos, f, default=json_util.default, indent=4, ensure_ascii=False)
+            
+        print(f" -> Generado {nombre_archivo} con {len(datos)} documentos.")
+    
